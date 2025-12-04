@@ -56,9 +56,10 @@ func joltage(bank []int, batteries int) int {
 
 	// start inclusive, end exclusive
 	start := 0
-	end := len(bank) - batteries + 1
 	for i := batteries - 1; i >= 0; i-- {
-		// find the max in the given partition
+		end := len(bank) - i
+
+		// find index of the max element in the given partition
 		maxIdx := start
 		for idx := start; idx < end; idx++ {
 			if bank[idx] > bank[maxIdx] {
@@ -68,7 +69,6 @@ func joltage(bank []int, batteries int) int {
 
 		joltage += int(math.Pow10(i)) * bank[maxIdx]
 		start = maxIdx + 1
-		end++
 	}
 
 	return joltage
