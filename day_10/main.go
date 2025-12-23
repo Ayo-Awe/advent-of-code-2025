@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -17,6 +16,11 @@ type machine struct {
 	numLights int // number of lights
 	buttons   [][]int
 	joltage   []int
+}
+
+type buttonCombo struct {
+	joltage []int
+	presses int
 }
 
 func (m machine) buttonmMasks() []int {
@@ -182,59 +186,75 @@ func buttonMask(button []int, numLights int) int {
 
 func PartTwo(machines []machine) int {
 	var minSum int
+	// we solve each machine as simulataneous equations
 	for _, m := range machines {
-		presses := minPressesJoltage(m)
-		minSum += presses
+		minSum += solve(m.joltage, patterns(m))
 	}
 	return minSum
 }
 
-func minPressesJoltage(m machine) int {
-	var presses int
-	joltage := slices.Clone(m.joltage)
+func patterns(m machine) map[string][]buttonCombo {
+	p := make(map[string][]buttonCombo)
+	for i := range 1 << len(m.buttons) {
+		joltage := make([]int, len(m.joltage))
 
-	// sort buttons by size in desc order
-	slices.SortFunc(m.buttons, func(a, b []int) int { return len(b) - len(a) })
-
-	excludedButtons := map[int]bool{}
-	for slices.Max(joltage) > 0 {
-
-		target := math.MaxInt
-		idx := 0
-		for i, v := range joltage {
-			if v != 0 && v < target {
-				target = v
-				idx = i
-			}
-		}
-
-		var found bool
-		for i, button := range m.buttons {
-			if excludedButtons[i] {
-				continue
-			}
-
-			if slices.Contains(button, idx) {
-				if !found {
-					// apply button target times
-					for _, level := range button {
-						joltage[level] -= target
-					}
-					found = true
+		var presses int
+		for buttonIdx := range len(m.buttons) {
+			pressed := (1<<buttonIdx)&i != 0
+			if pressed {
+				presses++
+				for _, light := range m.buttons[buttonIdx] {
+					joltage[light]++
 				}
-
-				// exclude all buttons that contain the target index
-				excludedButtons[i] = true
 			}
 		}
 
-		presses += target
+		pattern := joltageParityKey(joltage)
+		p[pattern] = append(p[pattern], buttonCombo{
+			joltage: joltage,
+			presses: presses,
+		})
 	}
-
-	if slices.Min(joltage) != 0 {
-		fmt.Println("oops", joltage)
-	}
-
-	return presses
+	return p
 }
 
+func solve(joltage []int, patterns map[string][]buttonCombo) int {
+	// base case: joltage is zeroed out e.g 0,0,0,0
+	if slices.Max(joltage) == 0 {
+		return 0
+	}
+
+	key := joltageParityKey(joltage)
+
+	minPresses := 1_000_000
+	for _, combo := range patterns[key] {
+		newJoltage := slices.Clone(joltage)
+
+		// subtract and halve
+		for j := range combo.joltage {
+			newJoltage[j] = (newJoltage[j] - combo.joltage[j]) / 2
+		}
+
+		// skip invalid joltage
+		if slices.Min(newJoltage) < 0 {
+			continue
+		}
+
+		presses := 2*solve(newJoltage, patterns) + combo.presses
+		minPresses = min(minPresses, presses)
+	}
+
+	return minPresses
+}
+
+func joltageParityKey(joltage []int) string {
+	var pattern string
+	for _, v := range joltage {
+		if v%2 == 0 {
+			pattern += "e"
+		} else {
+			pattern += "o"
+		}
+	}
+	return pattern
+}
